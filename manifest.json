@@ -1,0 +1,20 @@
+{
+  "name": "SHOOT FACTURE",
+  "short_name": "SHOOT FACTURE",
+  "description": "Application de facturation par SHOOT MEDIA",
+  "lang": "fr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0E0E0E",
+  "theme_color": "#0E0E0E",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
