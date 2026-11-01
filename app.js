@@ -1,9 +1,9 @@
 /* ==========================================================
    SHOOT FACTURE - Code principal
-   Étape 3 : comptes des entreprises (inscription, connexion)
+   Étape 4 : profil de l'entreprise (logo, coordonnées)
    ========================================================== */
 
-const VERSION = "0.3.0";
+const VERSION = "0.4.0";
 
 /* ----------------------------------------------------------
    1. Configuration Firebase (celle de ton projet)
@@ -37,6 +37,9 @@ const etat = {
 
 const vue = document.getElementById("view");
 
+// Écrans ajoutés par les modules (profil.js, et les suivants)
+const ecransModules = {};
+
 /* ----------------------------------------------------------
    3. Petits outils
    ---------------------------------------------------------- */
@@ -44,6 +47,11 @@ const vue = document.getElementById("view");
 function echapper(texte) {
   return String(texte ?? "").replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// N'accepte qu'une vraie image enregistrée (jamais un lien ou du code)
+function srcLogo(logo) {
+  return typeof logo === "string" && logo.startsWith("data:image/") ? logo : "";
 }
 
 const MESSAGES_ERREUR = {
@@ -103,6 +111,7 @@ const ecrans = {
   reglages: () => {
     const f = etat.firebase;
     const e = etat.entreprise || {};
+    const logo = srcLogo(e.logo);
     let texteFirebase = "Vérification…";
     let classe = "";
     if (f.statut === "ok") { texteFirebase = "Connecté"; classe = "ok"; }
@@ -124,8 +133,15 @@ const ecrans = {
       <p class="sous-titre">Votre compte et l'état de l'application.</p>
 
       <div class="bloc">
+        <h2>Mon entreprise</h2>
+        ${logo ? `<img class="logo-mini" src="${logo}" alt="Logo de l'entreprise">` : ""}
+        <div class="ligne"><span>Nom</span><span class="valeur">${echapper(e.nom)}</span></div>
+        ${e.telephone ? `<div class="ligne"><span>Téléphone</span><span class="valeur">${echapper(e.telephone)}</span></div>` : ""}
+        <button class="btn btn-large espace-haut" data-aller="profil">Modifier le profil de l'entreprise</button>
+      </div>
+
+      <div class="bloc">
         <h2>Mon compte</h2>
-        <div class="ligne"><span>Entreprise</span><span class="valeur">${echapper(e.nom)}</span></div>
         <div class="ligne"><span>E-mail</span><span class="valeur">${echapper(etat.utilisateur && etat.utilisateur.email)}</span></div>
         <button class="btn btn-secondaire btn-large espace-haut" id="btn-deconnexion">Se déconnecter</button>
       </div>
@@ -240,9 +256,13 @@ function ecranAuth() {
 /* ----------------------------------------------------------
    6. Affichage général
    ---------------------------------------------------------- */
+function ecranExiste(nom) {
+  return Boolean(ecrans[nom] || ecransModules[nom]);
+}
+
 function ecranCourant() {
   const nom = (location.hash || "#factures").replace("#", "");
-  return ecrans[nom] ? nom : "factures";
+  return ecranExiste(nom) ? nom : "factures";
 }
 
 function afficher() {
@@ -265,15 +285,25 @@ function afficher() {
   }
 
   const nom = ecranCourant();
-  vue.innerHTML = ecrans[nom]();
+  const module = ecransModules[nom];
+  vue.innerHTML = module ? module.rendu(ctx) : ecrans[nom]();
+
+  // Quel onglet de la barre du bas est allumé
+  const onglet = module && module.onglet ? module.onglet : nom;
   document.querySelectorAll(".tab").forEach((t) =>
-    t.classList.toggle("actif", t.dataset.tab === nom));
+    t.classList.toggle("actif", t.dataset.tab === onglet));
   window.scrollTo(0, 0);
+
+  // Les boutons « aller vers un autre écran »
+  vue.querySelectorAll("[data-aller]").forEach((b) =>
+    b.addEventListener("click", () => { location.hash = b.dataset.aller; }));
 
   const btnInstall = document.getElementById("btn-install");
   if (btnInstall) btnInstall.addEventListener("click", installer);
   const btnDeco = document.getElementById("btn-deconnexion");
   if (btnDeco) btnDeco.addEventListener("click", seDeconnecter);
+
+  if (module && module.brancher) module.brancher(ctx);
 }
 
 document.querySelectorAll(".tab").forEach((t) =>
@@ -437,6 +467,52 @@ async function surChangementUtilisateur(user) {
 }
 
 /* ----------------------------------------------------------
+   9b. Enregistrer les infos de l'entreprise
+   ---------------------------------------------------------- */
+async function enregistrerEntreprise(champs) {
+  const { db, F } = etat.fb;
+  const ref = F.doc(db, "entreprises", etat.utilisateur.uid);
+  await F.setDoc(ref, { ...champs, modifieLe: F.serverTimestamp() }, { merge: true });
+  etat.entreprise = { ...etat.entreprise, ...champs };
+}
+
+/* ----------------------------------------------------------
+   9c. Les modules (profil.js, et les suivants)
+   Un module est un fichier qui ajoute ses propres écrans.
+   La liste des modules est dans le fichier modules.js
+   ---------------------------------------------------------- */
+const ctx = {
+  etat,
+  echapper,
+  srcLogo,
+  afficher: () => afficher(),
+  enregistrerEntreprise
+};
+
+async function chargerModules() {
+  let liste = [];
+  try {
+    liste = (await import("./modules.js")).MODULES || [];
+  } catch (err) {
+    console.error("Liste des modules :", err);
+  }
+  for (const fichier of liste) {
+    try {
+      const m = await import("./" + fichier);
+      if (m.style) {
+        const balise = document.createElement("style");
+        balise.dataset.module = fichier;
+        balise.textContent = m.style;
+        document.head.appendChild(balise);
+      }
+      Object.assign(ecransModules, m.ecrans || {});
+    } catch (err) {
+      console.error("Module " + fichier + " :", err);
+    }
+  }
+}
+
+/* ----------------------------------------------------------
    10. Indicateur en ligne / hors ligne
    ---------------------------------------------------------- */
 const pastille = document.getElementById("net-pill");
@@ -517,4 +593,4 @@ async function demarrerFirebase() {
    14. Démarrage
    ---------------------------------------------------------- */
 afficher();
-demarrerFirebase();
+chargerModules().then(demarrerFirebase);
