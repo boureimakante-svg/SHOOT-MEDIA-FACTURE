@@ -2,10 +2,10 @@
    SHOOT FACTURE - Service worker
    Garde l'application en mémoire pour qu'elle s'ouvre même
    sans internet. Quand tu modifies l'application, change
-   le numéro de CACHE_NAME ci-dessous (v2 -> v3 -> v4...).
+   le numéro de CACHE_NAME ci-dessous (v3 -> v4 -> v5...).
    ========================================================== */
 
-const CACHE_NAME = "shoot-facture-v2";
+const CACHE_NAME = "shoot-facture-v3";
 const CACHE_FIREBASE = "firebase-sdk-10.14.1";
 
 const FICHIERS = [
@@ -63,10 +63,10 @@ self.addEventListener("fetch", (event) => {
   // Tout ce qui vient d'ailleurs : on ne s'en occupe pas
   if (url.origin !== self.location.origin) return;
 
-  // Nos fichiers : internet d'abord (toujours la dernière version),
-  // et si internet est coupé, on utilise la copie enregistrée.
+  // Nos fichiers : internet d'abord (toujours la dernière version, sans
+  // attendre), et si internet est coupé, on utilise la copie enregistrée.
   event.respondWith(
-    fetch(requete)
+    fetch(requete, { cache: "no-cache" })
       .then((reponse) => {
         const copie = reponse.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(requete, copie));
