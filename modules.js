@@ -6,5 +6,6 @@
    ========================================================== */
 
 export const MODULES = [
-  "profil.js"
+  "profil.js",
+  "clients.js"
 ];
