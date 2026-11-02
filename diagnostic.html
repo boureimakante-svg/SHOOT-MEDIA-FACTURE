@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="google" content="notranslate">
+<title>Diagnostic SHOOT FACTURE</title>
+<style>
+  body { font-family: system-ui, sans-serif; padding: 16px; line-height: 1.5; }
+  h1 { font-size: 22px; }
+  p { margin: 8px 0; padding: 8px 10px; border-radius: 8px; word-break: break-word; }
+  .ok { background: #E8F5EC; color: #1E8E3E; }
+  .ko { background: #FDECEC; color: #C62828; font-weight: 700; }
+  .info { background: #F1F1F1; color: #222; }
+</style>
+</head>
+<body>
+<h1>Diagnostic SHOOT FACTURE</h1>
+<div id="r"></div>
+<script type="module">
+const r = document.getElementById("r");
+const ligne = (type, texte) => {
+  const p = document.createElement("p");
+  p.className = type;
+  p.textContent = texte;
+  r.appendChild(p);
+};
+
+async function tester(nom) {
+  try {
+    const rep = await fetch(nom, { cache: "no-store" });
+    ligne(rep.ok ? "ok" : "ko", nom + " : réponse " + rep.status + " (" + (rep.headers.get("content-type") || "type inconnu") + ")");
+    if (!rep.ok) return;
+  } catch (e) {
+    ligne("ko", nom + " : impossible à télécharger (" + e.message + ")");
+    return;
+  }
+  try {
+    const m = await import("./" + nom + "?test=" + Date.now());
+    ligne("ok", nom + " : chargé sans erreur. Contient : " + Object.keys(m).join(", "));
+    if (m.ecrans) ligne("ok", nom + " : écrans trouvés : " + Object.keys(m.ecrans).join(", "));
+    if (m.MODULES) ligne("ok", nom + " : liste des modules : " + m.MODULES.join(", "));
+  } catch (e) {
+    ligne("ko", nom + " : ÉCHEC au chargement : " + e.message);
+  }
+}
+
+try {
+  const txt = await (await fetch("app.js", { cache: "no-store" })).text();
+  const v = txt.match(/const VERSION = "([^"]+)"/);
+  ligne("info", "app.js en ligne : version " + (v ? v[1] : "inconnue") + (txt.includes("chargerModules") ? " (gère les modules)" : " (ne gère PAS les modules)"));
+} catch (e) {
+  ligne("ko", "app.js illisible : " + e.message);
+}
+try {
+  const txt = await (await fetch("sw.js", { cache: "no-store" })).text();
+  const v = txt.match(/CACHE_NAME = "([^"]+)"/);
+  ligne("info", "sw.js en ligne : " + (v ? v[1] : "inconnu"));
+} catch (e) {
+  ligne("ko", "sw.js illisible : " + e.message);
+}
+
+await tester("modules.js");
+await tester("profil.js");
+
+try {
+  const regs = await navigator.serviceWorker.getRegistrations();
+  ligne("info", "Service workers installés : " + regs.length);
+  const noms = await caches.keys();
+  ligne("info", "Mémoires (caches) : " + (noms.join(", ") || "aucune"));
+} catch (e) {
+  ligne("info", "Service worker : " + e.message);
+}
+ligne("info", "Fin du diagnostic.");
+</script>
+</body>
+</html>
