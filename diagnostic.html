@@ -26,51 +26,62 @@ const ligne = (type, texte) => {
   r.appendChild(p);
 };
 
-async function tester(nom) {
+async function statut(nom) {
   try {
-    const rep = await fetch(nom, { cache: "no-store" });
-    ligne(rep.ok ? "ok" : "ko", nom + " : réponse " + rep.status + " (" + (rep.headers.get("content-type") || "type inconnu") + ")");
-    if (!rep.ok) return;
+    const rep = await fetch(nom + "?v=" + Date.now(), { cache: "no-store" });
+    return rep.status;
   } catch (e) {
-    ligne("ko", nom + " : impossible à télécharger (" + e.message + ")");
+    return "erreur réseau";
+  }
+}
+
+async function tester(nom) {
+  const s = await statut(nom);
+  if (s !== 200) {
+    ligne("ko", nom + " : fichier introuvable (réponse " + s + ")");
     return;
   }
   try {
     const m = await import("./" + nom + "?test=" + Date.now());
     ligne("ok", nom + " : chargé sans erreur. Contient : " + Object.keys(m).join(", "));
-    if (m.ecrans) ligne("ok", nom + " : écrans trouvés : " + Object.keys(m.ecrans).join(", "));
-    if (m.MODULES) ligne("ok", nom + " : liste des modules : " + m.MODULES.join(", "));
+    if (m.ecrans) ligne("ok", nom + " : écrans : " + Object.keys(m.ecrans).join(", "));
   } catch (e) {
     ligne("ko", nom + " : ÉCHEC au chargement : " + e.message);
   }
 }
 
 try {
-  const txt = await (await fetch("app.js", { cache: "no-store" })).text();
+  const txt = await (await fetch("app.js?v=" + Date.now(), { cache: "no-store" })).text();
   const v = txt.match(/const VERSION = "([^"]+)"/);
-  ligne("info", "app.js en ligne : version " + (v ? v[1] : "inconnue") + (txt.includes("chargerModules") ? " (gère les modules)" : " (ne gère PAS les modules)"));
+  ligne("info", "app.js en ligne : version " + (v ? v[1] : "inconnue"));
 } catch (e) {
   ligne("ko", "app.js illisible : " + e.message);
 }
+
+let liste = [];
 try {
-  const txt = await (await fetch("sw.js", { cache: "no-store" })).text();
-  const v = txt.match(/CACHE_NAME = "([^"]+)"/);
-  ligne("info", "sw.js en ligne : " + (v ? v[1] : "inconnu"));
+  const m = await import("./modules.js?test=" + Date.now());
+  liste = m.MODULES || [];
+  ligne("ok", "modules.js : liste des modules = " + liste.join(", "));
 } catch (e) {
-  ligne("ko", "sw.js illisible : " + e.message);
+  ligne("ko", "modules.js : ÉCHEC : " + e.message);
 }
 
-await tester("modules.js");
-await tester("profil.js");
+for (const nom of liste) await tester(nom);
 
+// Fichiers partagés : attention aux majuscules
+ligne("info", "Outils.js (O majuscule) : réponse " + await statut("Outils.js"));
+ligne("info", "outils.js (o minuscule) : réponse " + await statut("outils.js"));
+
+// Quelle orthographe produits.js demande-t-il ?
 try {
-  const regs = await navigator.serviceWorker.getRegistrations();
-  ligne("info", "Service workers installés : " + regs.length);
-  const noms = await caches.keys();
-  ligne("info", "Mémoires (caches) : " + (noms.join(", ") || "aucune"));
+  const txt = await (await fetch("produits.js?v=" + Date.now(), { cache: "no-store" })).text();
+  const m = txt.match(/from "\.\/([^"]+)"/);
+  ligne("info", "produits.js demande le fichier : " + (m ? m[1] : "aucun"));
 } catch (e) {
-  ligne("info", "Service worker : " + e.message);
+  ligne("info", "produits.js illisible");
 }
+
 ligne("info", "Fin du diagnostic.");
 </script>
 </body>
