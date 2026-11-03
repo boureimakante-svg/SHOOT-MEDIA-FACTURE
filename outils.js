@@ -1,5 +1,5 @@
 /* ==========================================================
-   SHOOT FACTURE - Outils partagés
+   SHOOT FACTURE - outils partagés
    Petites fonctions utilisées par plusieurs modules
    (prix, nombres, recherche).
    ========================================================== */
