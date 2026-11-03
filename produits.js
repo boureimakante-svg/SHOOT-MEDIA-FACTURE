@@ -5,7 +5,7 @@
    entreprises/{son identifiant}/produits
    ========================================================== */
 
-import { formaterMontant, lireNombre, simple } from "./outils.js";
+import { formaterMontant, lireNombre, simple } from "./Outils.js";
 
 /* ----------------------------------------------------------
    Styles de ce module
