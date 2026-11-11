@@ -8,5 +8,7 @@
 export const MODULES = [
   "profil.js",
   "clients.js",
-  "produits.js"
+  "produits.js",
+  "factures.js",
+  "facture-form.js"
 ];
