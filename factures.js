@@ -1,137 +1,161 @@
 /* ==========================================================
    SHOOT FACTURE - Module « Factures »
-   La liste des factures (historique), une facture en détail,
-   les paiements (avances et solde) et l'envoi par WhatsApp.
+   La liste des factures et la fiche d'une facture
+   (paiement, WhatsApp, modification, suppression).
    Rangées dans l'espace privé de l'entreprise :
    entreprises/{son identifiant}/factures
    ========================================================== */
 
-import { formaterMontant, formaterNombre, lireNombre, simple } from "./outils.js";
+import { formaterMontant, lireNombre, simple } from "./outils.js";
 import {
-  MODES_PAIEMENT, memoire, verifierProprietaire, devise, arrondir, statutDe, etiquette,
-  dateAujourdhui, dateFr, lienWhatsApp, chargerFactures, modifierFacture, supprimerFacture
+  MODES_PAIEMENT, memoire, verifierProprietaire, devise, arrondir, statutDe,
+  etiquette, dateAujourdhui, dateFr, lienWhatsApp,
+  chargerFactures, modifierFacture, supprimerFacture
 } from "./facturation.js";
 
 /* ----------------------------------------------------------
    Styles de ce module
    ---------------------------------------------------------- */
 export const style = `
-.resume { background: var(--noir); color: var(--blanc); border-radius: 14px; padding: 16px; margin: 16px 0 4px; }
-.resume-label { font-size: 13px; color: #BDBDBD; }
-.resume-montant { font-size: 28px; font-weight: 800; color: var(--orange); line-height: 1.2; }
-.resume-detail { font-size: 13px; color: #BDBDBD; }
+a.btn { display: flex; align-items: center; justify-content: center; text-decoration: none; }
+.champ select {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 12px;
+  border: 2px solid #CFCBC4;
+  border-radius: 12px;
+  background: var(--blanc);
+  color: var(--noir);
+  font: inherit;
+}
+.resume-factures {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--noir);
+  color: var(--blanc);
+  font-size: 14px;
+}
+.resume-factures strong { color: var(--orange); font-size: 17px; white-space: nowrap; }
+.resume-factures:empty { display: none; }
 
 .carte-facture {
-  display: block; width: 100%; text-align: left; margin-bottom: 10px; padding: 14px;
-  background: var(--blanc); border: 1px solid var(--trait); border-radius: 14px;
-  color: var(--noir); font: inherit; cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 76px;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  text-align: left;
+  background: var(--blanc);
+  border: 1px solid var(--trait);
+  border-radius: 14px;
+  color: var(--noir);
+  font: inherit;
+  cursor: pointer;
 }
 .carte-facture:active { background: var(--fond); }
-.cf-ligne { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-.cf-numero { font-weight: 800; }
-.cf-client { display: block; margin: 2px 0 6px; overflow-wrap: anywhere; }
-.cf-date { color: var(--gris); font-size: 14px; }
-.cf-total { font-weight: 800; white-space: nowrap; }
-.cf-solde { display: block; margin-top: 4px; font-size: 13px; color: var(--erreur); font-weight: 700; }
+.facture-textes { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 2px; }
+.facture-numero { font-weight: 800; font-size: 16px; }
+.facture-client { font-size: 14px; overflow-wrap: anywhere; }
+.facture-date { color: var(--gris); font-size: 12px; }
+.facture-droite { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.facture-total { font-weight: 800; font-size: 15px; white-space: nowrap; }
 
-.badge { flex: none; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
-.badge-ok { background: #E8F5EC; color: var(--ok); }
-.badge-avance { background: #FFF1E6; color: var(--orange-fonce); }
-.badge-impayee { background: #EDEDED; color: #333; }
-.badge-retard { background: #FDECEC; color: var(--erreur); }
+.badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.badge-ok { background: #E3F4E8; color: #17673A; }
+.badge-retard { background: #FDE3E1; color: #A12A22; }
+.badge-avance { background: #FFF1E6; color: #9A4A00; }
+.badge-impayee { background: #ECEAE6; color: #4A4743; }
 
-.papier { background: var(--blanc); border: 1px solid var(--trait); border-top: 5px solid var(--orange); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
-.p-entete { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; }
-.p-logo { flex: none; width: 64px; height: 64px; object-fit: contain; }
-.p-nom { font-weight: 800; font-size: 18px; line-height: 1.2; overflow-wrap: anywhere; }
-.p-texte { font-size: 13px; color: #3d3d3d; overflow-wrap: anywhere; }
-.p-titre { display: flex; justify-content: space-between; align-items: center; gap: 10px; border-top: 1px solid var(--trait); border-bottom: 1px solid var(--trait); padding: 10px 0; margin-bottom: 12px; }
-.p-titre span { font-weight: 800; letter-spacing: 0.08em; color: var(--gris); }
-.p-titre strong { font-size: 18px; }
-.p-label { display: block; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gris); margin-bottom: 2px; }
-.p-bloc { margin-bottom: 14px; }
-.p-lignes { margin: 8px 0 12px; }
-.p-ligne { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--trait); }
-.p-desc { overflow-wrap: anywhere; }
-.p-desc small { display: block; color: var(--gris); font-size: 13px; }
-.p-mont { font-weight: 700; white-space: nowrap; }
-.p-total-ligne { display: flex; justify-content: space-between; padding: 4px 0; }
-.p-total-ligne.gras { font-weight: 800; font-size: 18px; border-top: 2px solid var(--noir); margin-top: 6px; padding-top: 8px; }
-.p-paiement { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; font-size: 14px; }
-.p-paiement button { background: none; border: none; color: var(--erreur); font: inherit; font-weight: 700; cursor: pointer; padding: 6px 4px; }
-.p-solde { margin-top: 14px; padding: 14px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; font-weight: 800; font-size: 18px; }
-.p-solde.du { background: var(--noir); color: var(--orange); }
-.p-solde.paye { background: #E8F5EC; color: var(--ok); }
-.p-pied { margin-top: 14px; font-size: 13px; color: #3d3d3d; overflow-wrap: anywhere; }
-
-.actions-facture { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
-.btn-lien { text-decoration: none; }
-.panneau { background: var(--blanc); border: 1px solid var(--trait); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
-.panneau h2 { margin-bottom: 12px; }
+.titre-facture { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.titre-facture h1 { margin: 0; }
+.ligne-article { padding: 10px 0; border-bottom: 1px solid var(--trait); }
+.ligne-article:last-child { border-bottom: 0; }
+.article-nom { font-weight: 700; overflow-wrap: anywhere; }
+.article-detail { display: flex; justify-content: space-between; gap: 10px; color: var(--gris); font-size: 14px; }
+.ligne.total-fort { font-weight: 800; font-size: 17px; }
+.ligne.reste { font-weight: 800; color: var(--orange); }
+.notes-facture { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
 `;
 
 /* ----------------------------------------------------------
-   Petits outils
+   Mémoire du module
    ---------------------------------------------------------- */
-const texteHtml = (ctx, t) => ctx.echapper(t).replace(/\n/g, "<br>");
+let filtre = "toutes";   // toutes | encaisser | retard | payees
+
+const ICONE_FACTURE = '<svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z M14 3v5h5 M10 13h6 M10 17h6"/></svg>';
 
 /* ----------------------------------------------------------
-   Écran « Factures » (la liste = l'historique)
+   Écran « Factures » (la liste)
    ---------------------------------------------------------- */
-let filtre = "tous";   // tous | apayer | payees
+function accepte(f) {
+  const code = etiquette(f).code;
+  if (filtre === "encaisser") return code !== "payee";
+  if (filtre === "retard") return code === "retard";
+  if (filtre === "payees") return code === "payee";
+  return true;
+}
 
 function dessinerListe(ctx) {
   const zone = document.getElementById("liste-factures");
+  if (!zone || !memoire.liste) return;
   const liste = memoire.liste;
-  if (!zone || !liste) return;
-
+  const monnaie = devise(ctx);
   const recherche = simple((document.getElementById("recherche-facture") || {}).value || "").trim();
-  const aujourdhui = dateAujourdhui();
 
-  // Résumé : ce qu'il reste à encaisser
-  const enAttente = liste.filter((f) => arrondir(f.solde) > 0);
-  const reste = arrondir(enAttente.reduce((s, f) => s + arrondir(f.solde), 0));
-  const enRetard = enAttente.filter((f) => f.echeance && f.echeance < aujourdhui).length;
   const resume = document.getElementById("resume-factures");
   if (resume) {
-    resume.innerHTML = `
-      <div class="resume-label">Reste à encaisser</div>
-      <div class="resume-montant">${ctx.echapper(formaterMontant(reste, devise(ctx)))}</div>
-      <div class="resume-detail">${enAttente.length} facture${enAttente.length > 1 ? "s" : ""} en attente${enRetard ? ` · ${enRetard} en retard` : ""} · ${liste.length} au total</div>`;
+    const reste = liste.reduce((s, f) => s + (etiquette(f).code === "payee" ? 0 : arrondir(f.solde)), 0);
+    resume.innerHTML = liste.length
+      ? `<span>Reste à encaisser</span><strong>${ctx.echapper(formaterMontant(arrondir(reste), monnaie))}</strong>`
+      : "";
   }
 
   if (!liste.length) {
     zone.innerHTML = `
       <div class="vide">
-        <svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z M14 3v5h5 M10 13h6 M10 17h6"/></svg>
+        ${ICONE_FACTURE}
         <p>Aucune facture pour l'instant. Appuyez sur « + Nouvelle facture » pour créer la première.</p>
       </div>`;
     return;
   }
 
   const trouvees = liste.filter((f) =>
-    (filtre === "tous" || (filtre === "apayer" && arrondir(f.solde) > 0) || (filtre === "payees" && arrondir(f.solde) <= 0))
-    && (!recherche || simple([f.numero, f.client && f.client.nom, dateFr(f.date)].join(" ")).includes(recherche)));
+    accepte(f) && (!recherche || simple([f.numero, f.client && f.client.nom, f.client && f.client.telephone].join(" ")).includes(recherche)));
 
   if (!trouvees.length) {
     zone.innerHTML = `<p class="aide">Aucune facture ne correspond.</p>`;
     return;
   }
 
-  zone.innerHTML = trouvees.map((f) => {
-    const e = etiquette(f, aujourdhui);
-    return `
+  zone.innerHTML = `
+    <p class="compteur">${trouvees.length} facture${trouvees.length > 1 ? "s" : ""}</p>
+    ${trouvees.map((f) => {
+      const e = etiquette(f);
+      const nomClient = (f.client && f.client.nom) || "Client sans nom";
+      return `
       <button type="button" class="carte-facture" data-id="${ctx.echapper(f.id)}">
-        <span class="cf-ligne"><span class="cf-numero">${ctx.echapper(f.numero)}</span><span class="badge ${e.classe}">${e.libelle}</span></span>
-        <span class="cf-client">${ctx.echapper((f.client && f.client.nom) || "Client sans nom")}</span>
-        <span class="cf-ligne"><span class="cf-date">${ctx.echapper(dateFr(f.date))}</span><span class="cf-total">${ctx.echapper(formaterMontant(f.total, f.devise))}</span></span>
-        ${arrondir(f.solde) > 0 ? `<span class="cf-solde">Reste à payer : ${ctx.echapper(formaterMontant(f.solde, f.devise))}</span>` : ""}
+        <span class="facture-textes">
+          <span class="facture-numero">${ctx.echapper(f.numero)}</span>
+          <span class="facture-client">${ctx.echapper(nomClient)}</span>
+          <span class="facture-date">${ctx.echapper(dateFr(f.date))}</span>
+        </span>
+        <span class="facture-droite">
+          <span class="facture-total">${ctx.echapper(formaterMontant(f.total, f.devise || monnaie))}</span>
+          <span class="badge ${e.classe}">${ctx.echapper(e.libelle)}</span>
+        </span>
       </button>`;
-  }).join("");
+    }).join("")}`;
 
   zone.querySelectorAll(".carte-facture").forEach((b) =>
     b.addEventListener("click", () => {
-      memoire.selection = liste.find((f) => f.id === b.dataset.id) || null;
+      memoire.selection = memoire.liste.find((f) => f.id === b.dataset.id) || null;
       location.hash = "facture";
     }));
 }
@@ -163,170 +187,171 @@ async function remplirListe(ctx) {
 }
 
 /* ----------------------------------------------------------
-   Écran « Facture » (une facture en détail)
+   Écran « Fiche d'une facture »
    ---------------------------------------------------------- */
-function rendreFacture(ctx) {
+function rendreFiche(ctx) {
+  verifierProprietaire(ctx);
   const f = memoire.selection;
   if (!f) {
     return `
       <button type="button" class="lien retour" data-aller="factures">← Factures</button>
-      <h1>Facture</h1>
-      <p class="sous-titre">Aucune facture sélectionnée.</p>`;
+      <p class="aide">Cette facture n'est plus affichée. Revenez à la liste et appuyez sur la facture.</p>`;
   }
 
-  const e = f.emetteur || ctx.etat.entreprise || {};
-  const logo = ctx.srcLogo(ctx.etat.entreprise && ctx.etat.entreprise.logo);
-  const monnaie = f.devise || "FCFA";
+  const monnaie = f.devise || devise(ctx);
   const m = (n) => ctx.echapper(formaterMontant(n, monnaie));
+  const e = etiquette(f);
   const client = f.client || {};
-  const etiq = etiquette(f);
+  const lignes = Array.isArray(f.lignes) ? f.lignes : [];
+  const paiements = Array.isArray(f.paiements) ? f.paiements : [];
+  const nomEntreprise = (ctx.etat.entreprise && ctx.etat.entreprise.nom) || "";
 
-  const coordonnees = [
-    e.activite, e.adresse,
-    e.telephone ? "Tél : " + e.telephone : "",
-    e.whatsapp ? "WhatsApp : " + e.whatsapp : "",
-    e.emailPro, e.numeroLegal ? "N° " + e.numeroLegal : ""
-  ].filter(Boolean).map((l) => `<div class="p-texte">${texteHtml(ctx, l)}</div>`).join("");
-
-  const lignes = (f.lignes || []).map((l) => `
-    <div class="p-ligne">
-      <div class="p-desc">${ctx.echapper(l.description)}
-        <small>${ctx.echapper(formaterNombre(l.quantite))} × ${m(l.prix)}${l.unite ? " / " + ctx.echapper(l.unite) : ""}</small>
+  const blocLignes = lignes.map((l) => `
+    <div class="ligne-article">
+      <div class="article-nom">${ctx.echapper(l.description)}</div>
+      <div class="article-detail">
+        <span>${ctx.echapper(String(l.quantite))} × ${m(l.prix)}</span>
+        <span>${m(arrondir(Number(l.quantite) * Number(l.prix)))}</span>
       </div>
-      <div class="p-mont">${m(arrondir(l.quantite * l.prix))}</div>
     </div>`).join("");
 
-  const paiements = (f.paiements || []).map((p, i) => `
-    <div class="p-paiement">
-      <span>${ctx.echapper(dateFr(p.date))} · ${ctx.echapper(p.mode || "Paiement")}${p.note ? " (" + ctx.echapper(p.note) + ")" : ""}</span>
-      <span><strong>${m(p.montant)}</strong> <button type="button" data-suppr-paiement="${i}" aria-label="Supprimer ce paiement">✕</button></span>
-    </div>`).join("");
+  const blocPaiements = paiements.length ? `
+    <div class="bloc">
+      <h2>Paiements reçus</h2>
+      ${paiements.map((p) => `
+        <div class="ligne"><span>${ctx.echapper(dateFr(p.date))} · ${ctx.echapper(p.mode || "")}</span><span class="valeur">${m(p.montant)}</span></div>`).join("")}
+    </div>` : "";
 
-  const pied = [e.paiement ? "Moyens de paiement :\n" + e.paiement : "", f.notes || "", e.mentions || ""]
-    .filter(Boolean).map((t) => `<div>${texteHtml(ctx, t)}</div>`).join("<br>");
+  const blocPaiementForm = arrondir(f.solde) > 0 ? `
+    <div class="bloc">
+      <h2>Enregistrer un paiement</h2>
+      <form id="form-paiement" novalidate>
+        <div class="champ">
+          <label for="pay-montant">Montant reçu (${ctx.echapper(monnaie)})</label>
+          <input id="pay-montant" name="montant" type="text" inputmode="decimal" maxlength="18"
+                 placeholder="Ex. ${ctx.echapper(String(arrondir(f.solde)))}" autocomplete="off">
+        </div>
+        <div class="champ">
+          <label for="pay-mode">Mode de paiement</label>
+          <select id="pay-mode" name="mode">
+            ${MODES_PAIEMENT.map((x) => `<option value="${ctx.echapper(x)}">${ctx.echapper(x)}</option>`).join("")}
+          </select>
+        </div>
+        <button type="submit" class="btn btn-large" id="btn-paiement">Enregistrer le paiement</button>
+        <p id="message-paiement" class="message" role="alert"></p>
+      </form>
+    </div>` : "";
 
-  const solde = arrondir(f.solde);
-  const dateTexte = [`Date : ${dateFr(f.date)}`, f.echeance ? `Échéance : ${dateFr(f.echeance)}` : ""].filter(Boolean).join(" · ");
+  const blocWhatsApp = client.telephone
+    ? `<a class="btn btn-large" href="${ctx.echapper(lienWhatsApp(f, nomEntreprise))}" target="_blank" rel="noopener">Envoyer par WhatsApp</a>`
+    : `<p class="aide">Ajoutez un numéro de téléphone au client (bouton Modifier) pour l'envoyer par WhatsApp.</p>`;
 
   return `
     <button type="button" class="lien retour" data-aller="factures">← Factures</button>
+    <div class="titre-facture">
+      <h1>${ctx.echapper(f.numero)}</h1>
+      <span class="badge ${e.classe}">${ctx.echapper(e.libelle)}</span>
+    </div>
     ${memoire.flash ? `<p class="message succes">${ctx.echapper(memoire.flash)}</p>` : ""}
-    <div class="papier">
-      <div class="p-entete">
-        ${logo ? `<img class="p-logo" src="${logo}" alt="">` : ""}
-        <div><div class="p-nom">${ctx.echapper(e.nom || "")}</div>${coordonnees}</div>
-      </div>
-      <div class="p-titre"><span>FACTURE</span><strong>${ctx.echapper(f.numero)}</strong></div>
-      <div class="p-bloc"><span class="badge ${etiq.classe}">${etiq.libelle}</span> <span class="p-texte">${ctx.echapper(dateTexte)}</span></div>
-      <div class="p-bloc">
-        <span class="p-label">Facturé à</span>
-        <div><strong>${ctx.echapper(client.nom || "")}</strong></div>
-        ${client.telephone ? `<div class="p-texte">${ctx.echapper(client.telephone)}</div>` : ""}
-        ${client.adresse ? `<div class="p-texte">${texteHtml(ctx, client.adresse)}</div>` : ""}
-      </div>
-      <div class="p-lignes">${lignes}</div>
-      <div class="p-total-ligne"><span>Sous-total</span><span>${m(f.sousTotal)}</span></div>
-      ${arrondir(f.remise) > 0 ? `<div class="p-total-ligne"><span>Remise</span><span>− ${m(f.remise)}</span></div>` : ""}
-      ${Number(f.tva) > 0 ? `<div class="p-total-ligne"><span>TVA ${ctx.echapper(formaterNombre(f.tva))} %</span><span>${m(f.montantTva)}</span></div>` : ""}
-      <div class="p-total-ligne gras"><span>Total</span><span>${m(f.total)}</span></div>
-      ${paiements ? `<div class="p-bloc" style="margin-top:14px"><span class="p-label">Paiements reçus</span>${paiements}</div>` : ""}
-      <div class="p-solde ${solde > 0 ? "du" : "paye"}"><span>${solde > 0 ? "Reste à payer" : "Facture payée"}</span><span>${solde > 0 ? m(solde) : "✓"}</span></div>
-      ${pied ? `<div class="p-pied">${pied}</div>` : ""}
+
+    <div class="bloc">
+      <h2>Client</h2>
+      <div class="ligne"><span>Nom</span><span class="valeur">${ctx.echapper(client.nom || "—")}</span></div>
+      ${client.telephone ? `<div class="ligne"><span>Téléphone</span><span class="valeur">${ctx.echapper(client.telephone)}</span></div>` : ""}
+      <div class="ligne"><span>Date</span><span class="valeur">${ctx.echapper(dateFr(f.date))}</span></div>
+      ${f.echeance ? `<div class="ligne"><span>Échéance</span><span class="valeur">${ctx.echapper(dateFr(f.echeance))}</span></div>` : ""}
     </div>
 
-    <div id="panneau-paiement" class="panneau" hidden>
-      <h2>Ajouter un paiement</h2>
-      <form id="form-paiement" novalidate>
-        <div class="champ"><label for="pa-montant">Montant (${ctx.echapper(monnaie)})</label>
-          <input id="pa-montant" name="montant" type="text" inputmode="decimal" value="${solde > 0 ? ctx.echapper(String(solde).replace(".", ",")) : ""}" autocomplete="off"></div>
-        <div class="champ"><label for="pa-mode">Mode de paiement</label>
-          <select id="pa-mode" name="mode">${MODES_PAIEMENT.map((x) => `<option>${ctx.echapper(x)}</option>`).join("")}</select></div>
-        <div class="champ"><label for="pa-date">Date</label>
-          <input id="pa-date" name="date" type="date" value="${dateAujourdhui()}"></div>
-        <button type="submit" class="btn btn-large">Enregistrer le paiement</button>
-        <p id="message-paiement" class="message" role="alert"></p>
-      </form>
+    <div class="bloc">
+      <h2>Détail</h2>
+      ${blocLignes || '<p class="aide">Aucune ligne.</p>'}
+      <div class="ligne espace-haut"><span>Sous-total</span><span class="valeur">${m(f.sousTotal)}</span></div>
+      ${Number(f.remise) > 0 ? `<div class="ligne"><span>Remise</span><span class="valeur">− ${m(f.remise)}</span></div>` : ""}
+      ${Number(f.tva) > 0 ? `<div class="ligne"><span>TVA (${ctx.echapper(String(f.tva))} %)</span><span class="valeur">${m(f.montantTva)}</span></div>` : ""}
+      <div class="ligne total-fort"><span>Total</span><span class="valeur">${m(f.total)}</span></div>
+      <div class="ligne"><span>Déjà payé</span><span class="valeur">${m(f.paye)}</span></div>
+      <div class="ligne reste"><span>Reste à payer</span><span class="valeur">${m(f.solde)}</span></div>
     </div>
 
-    <div class="actions-facture">
-      ${solde > 0 ? '<button type="button" class="btn btn-large" id="btn-paiement">Ajouter un paiement</button>' : ""}
-      <a class="btn btn-secondaire btn-large btn-lien" href="${ctx.echapper(lienWhatsApp(f, e.nom))}" target="_blank" rel="noopener">Envoyer par WhatsApp</a>
+    ${f.notes ? `<div class="bloc"><h2>Notes</h2><p class="notes-facture">${ctx.echapper(f.notes)}</p></div>` : ""}
+
+    ${blocPaiements}
+    ${blocPaiementForm}
+
+    <div class="actions-client">
+      ${blocWhatsApp}
       <button type="button" class="btn btn-secondaire btn-large" id="btn-modifier-facture">Modifier la facture</button>
       <button type="button" class="btn btn-danger btn-large" id="btn-supprimer-facture">Supprimer la facture</button>
     </div>
     <p id="message-facture" class="message" role="alert"></p>`;
 }
 
-function brancherFacture(ctx) {
+function brancherFiche(ctx) {
   verifierProprietaire(ctx);
-  const f = memoire.selection;
-  if (!f) { location.hash = "factures"; return; }
   memoire.flash = "";
+  const f = memoire.selection;
+  if (!f) return;
+  let occupe = false;
 
-  const dire = (texte, type) => {
-    const z = document.getElementById("message-facture");
-    z.textContent = texte;
-    z.className = "message " + type;
-  };
+  /* --- Enregistrer un paiement --- */
+  const form = document.getElementById("form-paiement");
+  if (form) {
+    const message = document.getElementById("message-paiement");
+    const bouton = document.getElementById("btn-paiement");
+    const dire = (texte, type) => { message.textContent = texte; message.className = "message " + type; };
 
-  // Ajouter un paiement
-  const panneau = document.getElementById("panneau-paiement");
-  const btnPaiement = document.getElementById("btn-paiement");
-  if (btnPaiement) {
-    btnPaiement.addEventListener("click", () => {
-      panneau.hidden = !panneau.hidden;
-      if (!panneau.hidden) panneau.scrollIntoView({ block: "center" });
-    });
-  }
-  const formPaiement = document.getElementById("form-paiement");
-  formPaiement.addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    const zone = document.getElementById("message-paiement");
-    const erreur = (t) => { zone.textContent = t; zone.className = "message erreur"; };
-    const montant = lireNombre(formPaiement.elements.montant.value);
-    const solde = arrondir(f.solde);
-    if (Number.isNaN(montant) || montant <= 0) return erreur("Indiquez un montant valide, par exemple 50000.");
-    if (montant > solde) return erreur("Ce montant dépasse le reste à payer.");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(formPaiement.elements.date.value)) return erreur("Indiquez la date du paiement.");
-    if (!navigator.onLine) return erreur("Vous êtes hors ligne. Reconnectez-vous à internet pour enregistrer.");
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      if (occupe) return;
+      const texte = form.elements.montant.value.trim();
+      const montant = lireNombre(texte);
+      const mode = form.elements.mode.value;
 
-    const paiements = [...(f.paiements || []), { date: formPaiement.elements.date.value, montant, mode: formPaiement.elements.mode.value }];
-    const paye = arrondir(paiements.reduce((s, p) => s + p.montant, 0));
-    try {
-      await modifierFacture(ctx, f, { paiements, paye, solde: arrondir(f.total - paye), statut: statutDe(f.total, paye) });
-      memoire.flash = "Paiement enregistré.";
-      ctx.afficher();
-    } catch (err) {
-      console.error(err);
-      erreur("L'enregistrement a échoué. Vérifiez votre connexion et réessayez.");
-    }
-  });
+      if (!texte || Number.isNaN(montant) || montant <= 0) return dire("Indiquez un montant valide, par exemple 5000.", "erreur");
+      if (montant > arrondir(f.solde)) return dire("Ce montant dépasse le reste à payer.", "erreur");
+      if (!navigator.onLine) return dire("Vous êtes hors ligne. Reconnectez-vous à internet pour enregistrer.", "erreur");
 
-  // Supprimer un paiement saisi par erreur
-  document.querySelectorAll("[data-suppr-paiement]").forEach((b) =>
-    b.addEventListener("click", async () => {
-      if (!window.confirm("Supprimer ce paiement ?")) return;
-      if (!navigator.onLine) return dire("Vous êtes hors ligne. Reconnectez-vous à internet.", "erreur");
-      const paiements = (f.paiements || []).filter((_, i) => i !== Number(b.dataset.supprPaiement));
-      const paye = arrondir(paiements.reduce((s, p) => s + p.montant, 0));
+      occupe = true;
+      bouton.disabled = true;
+      bouton.textContent = "Enregistrement…";
+      message.className = "message";
+      message.textContent = "";
       try {
-        await modifierFacture(ctx, f, { paiements, paye, solde: arrondir(f.total - paye), statut: statutDe(f.total, paye) });
-        memoire.flash = "Paiement supprimé.";
+        const paye = arrondir(arrondir(f.paye) + montant);
+        const solde = arrondir(arrondir(f.total) - paye);
+        const paiements = [...(Array.isArray(f.paiements) ? f.paiements : []), { date: dateAujourdhui(), montant, mode }];
+        await modifierFacture(ctx, f, { paye, solde, statut: statutDe(f.total, paye), paiements });
+        memoire.flash = "Paiement enregistré.";
         ctx.afficher();
       } catch (err) {
         console.error(err);
-        dire("La suppression a échoué. Vérifiez votre connexion et réessayez.", "erreur");
+        dire("L'enregistrement a échoué. Vérifiez votre connexion et réessayez.", "erreur");
+        occupe = false;
+        bouton.disabled = false;
+        bouton.textContent = "Enregistrer le paiement";
       }
-    }));
+    });
+  }
 
+  /* --- Modifier --- */
   document.getElementById("btn-modifier-facture").addEventListener("click", () => {
     memoire.edition = f;
-    location.hash = "nouvelle-facture";
+    location.hash = "facture-form";
   });
 
-  document.getElementById("btn-supprimer-facture").addEventListener("click", async () => {
-    if (!window.confirm(`Supprimer la facture ${f.numero} ? Son numéro ne sera pas réutilisé. Cette action est définitive.`)) return;
-    if (!navigator.onLine) return dire("Vous êtes hors ligne. Reconnectez-vous à internet.", "erreur");
+  /* --- Supprimer --- */
+  const supprimer = document.getElementById("btn-supprimer-facture");
+  const messageFacture = document.getElementById("message-facture");
+  supprimer.addEventListener("click", async () => {
+    if (occupe) return;
+    if (!window.confirm("Supprimer cette facture ? Cette action est définitive.")) return;
+    if (!navigator.onLine) {
+      messageFacture.textContent = "Vous êtes hors ligne. Reconnectez-vous à internet pour supprimer.";
+      messageFacture.className = "message erreur";
+      return;
+    }
+    occupe = true;
+    supprimer.disabled = true;
     try {
       await supprimerFacture(ctx, f);
       memoire.selection = null;
@@ -334,7 +359,10 @@ function brancherFacture(ctx) {
       location.hash = "factures";
     } catch (err) {
       console.error(err);
-      dire("La suppression a échoué. Vérifiez votre connexion et réessayez.", "erreur");
+      messageFacture.textContent = "La suppression a échoué. Vérifiez votre connexion et réessayez.";
+      messageFacture.className = "message erreur";
+      occupe = false;
+      supprimer.disabled = false;
     }
   });
 }
@@ -350,22 +378,22 @@ export const ecrans = {
         `<button type="button" class="puce${filtre === valeur ? " actif" : ""}" data-filtre="${valeur}">${texte}</button>`;
       return `
         <h1>Factures</h1>
-        <p class="sous-titre">Toutes vos factures au même endroit.</p>
+        <p class="sous-titre">Vos factures et ce qu'il reste à encaisser.</p>
         ${memoire.flash ? `<p class="message succes">${ctx.echapper(memoire.flash)}</p>` : ""}
         <button type="button" class="btn btn-large" id="btn-nouvelle-facture">+ Nouvelle facture</button>
-        <div class="resume" id="resume-factures"><div class="resume-label">Reste à encaisser</div><div class="resume-montant">…</div></div>
+        <div class="resume-factures" id="resume-factures"></div>
         <div class="champ recherche">
-          <label for="recherche-facture" class="cache">Rechercher une facture</label>
-          <input id="recherche-facture" type="search" placeholder="Numéro, client ou date…" autocomplete="off" maxlength="60">
+          <label for="recherche-facture" class="cache">Rechercher</label>
+          <input id="recherche-facture" type="search" placeholder="Numéro ou client…" autocomplete="off" maxlength="60">
         </div>
-        <div class="puces">${puce("tous", "Toutes")}${puce("apayer", "À payer")}${puce("payees", "Payées")}</div>
+        <div class="puces">${puce("toutes", "Toutes")}${puce("encaisser", "À encaisser")}${puce("retard", "En retard")}${puce("payees", "Payées")}</div>
         <div id="liste-factures" aria-live="polite"><div class="chargement">Chargement…</div></div>`;
     },
     brancher(ctx) {
       memoire.flash = "";
       document.getElementById("btn-nouvelle-facture").addEventListener("click", () => {
         memoire.edition = null;
-        location.hash = "nouvelle-facture";
+        location.hash = "facture-form";
       });
       document.getElementById("recherche-facture").addEventListener("input", () => dessinerListe(ctx));
       document.querySelectorAll(".puce").forEach((b) =>
@@ -380,7 +408,7 @@ export const ecrans = {
 
   facture: {
     onglet: "factures",
-    rendu: (ctx) => rendreFacture(ctx),
-    brancher: (ctx) => brancherFacture(ctx)
+    rendu: (ctx) => rendreFiche(ctx),
+    brancher: (ctx) => brancherFiche(ctx)
   }
 };
