@@ -386,6 +386,7 @@ export const ecrans = {
         <div class="onglets-doc">
           <button type="button" class="onglet-doc actif" data-aller="factures">Factures</button>
           <button type="button" class="onglet-doc" data-aller="devis">Devis</button>
+          <button type="button" class="onglet-doc" data-aller="bilan">Bilan</button>
         </div>
         <h1>Factures</h1>
         <p class="sous-titre">Vos factures et ce qu'il reste à encaisser.</p>
