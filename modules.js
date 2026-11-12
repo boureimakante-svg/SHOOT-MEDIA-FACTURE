@@ -10,5 +10,7 @@ export const MODULES = [
   "clients.js",
   "produits.js",
   "factures.js",
-  "facture-form.js"
+  "facture-form.js",
+   "facture-pdf.js"
 ];
+
