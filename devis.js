@@ -197,6 +197,7 @@ function barreOnglets(actif) {
     <div class="onglets-doc">
       <button type="button" class="onglet-doc${actif === "factures" ? " actif" : ""}" data-aller="factures">Factures</button>
       <button type="button" class="onglet-doc${actif === "devis" ? " actif" : ""}" data-aller="devis">Devis</button>
+      <button type="button" class="onglet-doc${actif === "bilan" ? " actif" : ""}" data-aller="bilan">Bilan</button>
     </div>`;
 }
 
