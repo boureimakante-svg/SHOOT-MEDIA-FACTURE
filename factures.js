@@ -280,6 +280,7 @@ function rendreFiche(ctx) {
 
     <div class="actions-client">
       ${blocWhatsApp}
+      <button type="button" class="btn btn-secondaire btn-large" id="btn-pdf-facture">Facture en PDF / Imprimer</button>
       <button type="button" class="btn btn-secondaire btn-large" id="btn-modifier-facture">Modifier la facture</button>
       <button type="button" class="btn btn-danger btn-large" id="btn-supprimer-facture">Supprimer la facture</button>
     </div>
@@ -332,6 +333,11 @@ function brancherFiche(ctx) {
       }
     });
   }
+
+  /* --- PDF / impression --- */
+  document.getElementById("btn-pdf-facture").addEventListener("click", () => {
+    location.hash = "facture-pdf";
+  });
 
   /* --- Modifier --- */
   document.getElementById("btn-modifier-facture").addEventListener("click", () => {
