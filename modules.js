@@ -1,7 +1,7 @@
 /* ==========================================================
    SHOOT FACTURE - Liste des modules
    Chaque module est un fichier qui ajoute des écrans.
-   Pour ajouter un module : créer son fichier, puis ajouter
+   Pour ajouter un module : créer son fichier puis ajouter
    son nom dans la liste ci-dessous.
    ========================================================== */
 
@@ -11,8 +11,7 @@ export const MODULES = [
   "produits.js",
   "factures.js",
   "facture-form.js",
-   "facture-pdf.js",
-    "devis.js",
-   "bilan.js
+  "facture-pdf.js",
+  "devis.js",
+  "bilan.js"
 ];
-
