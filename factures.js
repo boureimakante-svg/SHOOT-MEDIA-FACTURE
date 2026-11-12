@@ -383,6 +383,10 @@ export const ecrans = {
       const puce = (valeur, texte) =>
         `<button type="button" class="puce${filtre === valeur ? " actif" : ""}" data-filtre="${valeur}">${texte}</button>`;
       return `
+        <div class="onglets-doc">
+          <button type="button" class="onglet-doc actif" data-aller="factures">Factures</button>
+          <button type="button" class="onglet-doc" data-aller="devis">Devis</button>
+        </div>
         <h1>Factures</h1>
         <p class="sous-titre">Vos factures et ce qu'il reste à encaisser.</p>
         ${memoire.flash ? `<p class="message succes">${ctx.echapper(memoire.flash)}</p>` : ""}
