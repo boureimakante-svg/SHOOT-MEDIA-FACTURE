@@ -11,6 +11,7 @@ export const MODULES = [
   "produits.js",
   "factures.js",
   "facture-form.js",
-   "facture-pdf.js"
+   "facture-pdf.js",
+    "devis.js"
 ];
 
