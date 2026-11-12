@@ -91,6 +91,12 @@ function rendreFormulaire(ctx) {
       <div class="bloc">
         <h2>Client</h2>
         <div class="champ">
+          <label for="choix-client">Client enregistré (facultatif)</label>
+          <select id="choix-client">
+            <option value="">Saisir un autre client</option>
+          </select>
+        </div>
+        <div class="champ">
           <label for="f-client">Nom du client</label>
           <input id="f-client" name="client" type="text" value="${e(client.nom || "")}" maxlength="120"
                  placeholder="Ex. Awa Traoré" autocomplete="off">
@@ -305,6 +311,35 @@ function brancherFormulaire(ctx) {
       console.warn("Produits non chargés :", err);
     }
   })();
+
+  /* --- Clients enregistrés dans le carnet --- */
+  let clients = [];
+  (async () => {
+    try {
+      const { db, F } = ctx.etat.fb;
+      const uid = ctx.etat.utilisateur.uid;
+      const resultat = await F.getDocs(F.collection(db, "entreprises", uid, "clients"));
+      clients = resultat.docs.map((x) => ({ id: x.id, ...x.data() }))
+        .sort((a, b) => String(a.nom || "").localeCompare(String(b.nom || ""), "fr", { sensitivity: "base" }));
+      const liste = document.getElementById("choix-client");
+      if (!liste || !form.isConnected) return;
+      clients.forEach((c) => {
+        const option = document.createElement("option");
+        option.value = c.id;
+        option.textContent = c.nom + (c.telephone ? " — " + c.telephone : "");
+        liste.appendChild(option);
+      });
+    } catch (err) {
+      console.warn("Clients non chargés :", err);
+    }
+  })();
+
+  document.getElementById("choix-client").addEventListener("change", (ev) => {
+    const c = clients.find((x) => x.id === ev.target.value);
+    if (!c) return;
+    form.elements.client.value = c.nom || "";
+    form.elements.telephone.value = c.telephone || "";
+  });
 
   document.getElementById("btn-ajouter-ligne").addEventListener("click", () => {
     const choix = document.getElementById("choix-produit");
